@@ -54,12 +54,24 @@ public interface GpuPluginConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "enableSkybox",
+		name = "Enable Skybox",
+		description = "Enables a dynamically colored skybox",
+		position = 3
+	)
+	default boolean enableSkybox()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "enableFog",
 		name = "Enable Fog",
-		description = "Enables a dynamic skybox and fog around the draw distance"
+		description = "Enables skybox-colored fog",
+		position = 4
 	)
 	default boolean enableFog()
 	{
-		return true;
+		return false;
 	}
 }
