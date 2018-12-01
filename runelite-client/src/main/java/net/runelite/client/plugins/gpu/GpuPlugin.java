@@ -215,10 +215,17 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 	private int centerX;
 	private int centerY;
 
+	private int minDrawnX = Integer.MAX_VALUE;
+	private int maxDrawnX = Integer.MIN_VALUE;
+	private int minDrawnZ = Integer.MAX_VALUE;
+	private int maxDrawnZ = Integer.MIN_VALUE;
+
 	// Uniforms
 	private int uniUseFog;
 	private int uniFogColor;
 	private int uniDrawDistance;
+	private int uniFogDepth;
+	private int uniSceneBounds;
 	private int uniCameraPosition;
 	private int uniProjectionMatrix;
 	private int uniBrightness;
@@ -500,6 +507,8 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		uniBrightness = gl.glGetUniformLocation(glProgram, "brightness");
 		uniSmoothBanding = gl.glGetUniformLocation(glProgram, "smoothBanding");
 		uniDrawDistance = gl.glGetUniformLocation(glProgram, "drawDistance");
+		uniFogDepth = gl.glGetUniformLocation(glProgram, "fogDepth");
+		uniSceneBounds = gl.glGetUniformLocation(glProgram, "sceneBounds");
 		uniFogColor = gl.glGetUniformLocation(glProgram, "fogColor");
 		uniUseFog = gl.glGetUniformLocation(glProgram, "useFog");
 		uniCameraPosition = gl.glGetUniformLocation(glProgram, "cameraPosition");
@@ -745,6 +754,11 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 		final Scene scene = client.getScene();
 		drawDistance = Math.max(0, Math.min(MAX_DISTANCE, config.drawDistance()));
 		scene.setDrawDistance(drawDistance);
+
+		minDrawnX = Integer.MAX_VALUE;
+		maxDrawnX = Integer.MIN_VALUE;
+		minDrawnZ = Integer.MAX_VALUE;
+		maxDrawnZ = Integer.MIN_VALUE;
 	}
 
 	public void drawScenePaint(int orientation, int pitchSin, int pitchCos, int yawSin, int yawCos, int x, int y, int z,
@@ -756,7 +770,6 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			x = tileX * Perspective.LOCAL_TILE_SIZE;
 			y = 0;
 			z = tileY * Perspective.LOCAL_TILE_SIZE;
-
 			GpuIntBuffer b = modelBufferUnordered;
 			++unorderedModels;
 
@@ -770,6 +783,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			buffer.put(x).put(y).put(z);
 
 			targetBufferOffset += 2 * 3;
+
+			// Ideally this shouldn't be done on every frame
+			minDrawnX = Integer.min(minDrawnX, x);
+			maxDrawnX = Integer.max(maxDrawnX, x);
+			minDrawnZ = Integer.min(minDrawnZ, z);
+			maxDrawnZ = Integer.max(maxDrawnZ, z);
 		}
 	}
 
@@ -796,6 +815,12 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 			buffer.put(x).put(y).put(z);
 
 			targetBufferOffset += model.getBufferLen();
+
+			// Ideally this shouldn't be done on every frame
+			minDrawnX = Integer.min(minDrawnX, x);
+			maxDrawnX = Integer.max(maxDrawnX, x);
+			minDrawnZ = Integer.min(minDrawnZ, z);
+			maxDrawnZ = Integer.max(maxDrawnZ, z);
 		}
 	}
 
@@ -1003,7 +1028,14 @@ public class GpuPlugin extends Plugin implements DrawCallbacks
 
 			gl.glUniform1i(uniUseFog, config.enableFog() ? 1 : 0);
 			gl.glUniform1i(uniDrawDistance, drawDistance);
+			gl.glUniform1i(uniFogDepth, config.fogDepth());
 			gl.glUniform3i(uniCameraPosition, client.getCameraX2(), client.getCameraY2(), client.getCameraZ2());
+			gl.glUniform4i(uniSceneBounds,
+					Integer.max(minDrawnX, client.getCameraX2() - drawDistance * Perspective.LOCAL_TILE_SIZE),
+					Integer.min(maxDrawnX, client.getCameraX2() + (drawDistance - 1) * Perspective.LOCAL_TILE_SIZE),
+					Integer.max(minDrawnZ, client.getCameraZ2() - drawDistance * Perspective.LOCAL_TILE_SIZE),
+					Integer.min(maxDrawnZ, client.getCameraZ2() + (drawDistance - 1) * Perspective.LOCAL_TILE_SIZE - 1)
+			);
 
 			if (config.enableSkybox())
 			{
